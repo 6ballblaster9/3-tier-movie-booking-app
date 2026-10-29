@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>CineVerse | Book tickets</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;0,800;1,700&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head><body>
+<header class="topbar"><a class="brand" href="#">CINE<span>VERSE</span></a><nav><a class="active" href="#now-showing">Now Showing</a><a href="#experience">Experience</a><a href="#offers">Offers</a></nav><button class="location"><span>⌖</span> Nagpur <b>⌄</b></button></header>
+<main><section class="hero" id="now-showing"><div class="hero-copy"><p class="eyebrow">NOW PLAYING · IMAX EXPERIENCE</p><h1>Beyond the<br><em>last horizon.</em></h1><p class="description">A breathtaking voyage through light, time, and the spaces between stars.</p><div class="facts"><span>2H 28M</span><i></i><span>SCI-FI / ADVENTURE</span><i></i><span>U/A 13+</span></div><a class="trailer" href="#booking"><span>▶</span> Book now</a></div><div class="poster"><div class="orbit o1"></div><div class="orbit o2"></div><div class="planet"></div><div class="poster-title">THE LAST<br><strong>HORIZON</strong></div><div class="poster-sub">A MIRA SOLAN FILM</div></div></section>
+<section class="booking" id="booking"><div class="booking-heading"><p class="eyebrow">RESERVE YOUR SEAT</p><h2>A night at the movies, <em>made yours.</em></h2></div><div class="steps"><span class="current">01 <b>Movie</b></span><span class="line"></span><span id="seatStep">02 <b>Seats</b></span><span class="line"></span><span>03 <b>Checkout</b></span></div>
+<section class="movie-picker"><div class="picker-title"><div><label>CHOOSE A MOVIE</label><h3>What would you like to watch?</h3></div><p>4 films now showing</p></div><div class="movie-cards" id="movieCards"></div></section><p class="flow-message" id="flowMessage">Select a movie above to view upcoming shows and available seats.</p>
+<div class="booking-grid" id="bookingDetails" hidden><section class="selection-panel"><div class="movie-row"><div class="mini-poster" id="miniPoster">HORIZON</div><div><h3 id="selectedMovieName">The Last Horizon</h3><p id="selectedMovieMeta">IMAX with Laser · English</p><div class="rating" id="selectedMovieRating">★ 8.7 <span>IMDb</span></div></div><button class="change" id="changeMovie">Change</button></div><div class="choose-block"><label>SELECT DATE</label><div class="dates" id="dates"></div></div><div class="choose-block"><label>SELECT SHOWTIME</label><div class="showtimes" id="showtimes"></div><p class="no-shows" id="noShows" hidden>No more shows today. Please choose a later date.</p></div><div class="cinema"><div class="cinema-icon">✦</div><div><h3>CineVerse Luxe, Phoenix</h3><p>Lower Parel · IMAX with Laser</p></div></div></section><section class="seat-panel"><div class="seat-header"><div><label>SELECT SEATS</label><h3>Choose your perfect view</h3></div><div class="legend"><span><i class="seat available"></i> Available</span><span><i class="seat occupied"></i> Taken</span><span><i class="seat chosen"></i> Yours</span></div></div><div class="screen">SCREEN <span></span></div><div class="seat-map" id="seatmap"></div><div class="seat-note">Tap a seat to select · Maximum 6 seats per booking</div></section></div>
+<aside class="summary" id="summary" hidden><div><p class="eyebrow">YOUR BOOKING</p><h3 id="summarySeats">Select your seats</h3><p id="summaryInfo">Select a showtime</p></div><div class="total"><span>Total</span><strong id="total">₹0</strong></div><button id="continueBtn" disabled>Continue to checkout <span>→</span></button></aside>
+<div class="checkout-panel" id="checkoutPanel" hidden>
+  <div class="checkout-header"><p class="eyebrow">CHECKOUT</p><h3>Complete your booking</h3></div>
+  <form id="checkoutForm" novalidate>
+    <div class="checkout-field">
+      <label for="customerName">Full Name</label>
+      <input id="customerName" type="text" placeholder="Enter your full name" required>
+    </div>
+    <div class="checkout-field">
+      <label for="customerEmail">Email Address</label>
+      <input id="customerEmail" type="email" placeholder="name@example.com" required>
+    </div>
+    <div class="checkout-actions">
+      <button type="button" class="secondary" id="backToSeatsBtn">Back to seats</button>
+      <button type="submit" class="primary" id="confirmBookingBtn">Confirm booking</button>
+    </div>
+    <p class="error-message" id="checkoutError" hidden></p>
+  </form>
+</div>
+<div class="confirmation-panel" id="confirmationPanel" hidden>
+  <p class="eyebrow">BOOKING CONFIRMED</p>
+  <h3>Booking Confirmed</h3>
+  <div class="confirmation-grid">
+    <div><span>Booking Reference</span><strong id="confirmationReference">-</strong></div>
+    <div><span>Movie</span><strong id="confirmationMovie">-</strong></div>
+    <div><span>Date</span><strong id="confirmationDate">-</strong></div>
+    <div><span>Showtime</span><strong id="confirmationTime">-</strong></div>
+    <div><span>Seats</span><strong id="confirmationSeats">-</strong></div>
+    <div><span>Total Amount</span><strong id="confirmationTotal">₹0</strong></div>
+  </div>
+  <button class="primary full" id="bookAnotherBtn">Book another movie</button>
+</div></section></main><footer id="experience">CINEVERSE <span>·</span> A better way to watch stories unfold.</footer><script src="script.js"></script></body></html>

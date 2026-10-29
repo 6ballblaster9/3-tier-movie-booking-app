@@ -1,0 +1,378 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CineVerse deployment with web and app EC2 tiers and private RDS.
+
+Parameters:
+  BundleUrl:
+    Type: String
+    NoEcho: true
+    Description: Time-limited URL for the private application source bundle.
+  AppBundleUrl:
+    Type: String
+    NoEcho: true
+    Description: Time-limited URL used when replacing the application instance.
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    MinLength: 20
+    MaxLength: 64
+    AllowedPattern: '^[A-Za-z0-9]+$'
+    Description: Temporary alphanumeric password for the application database user.
+  AmazonLinux2023Ami:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Resources:
+  CineVerseVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: cineverse-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: cineverse-igw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  WebSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      CidrBlock: 10.20.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: cineverse-web-public
+
+  AppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      CidrBlock: 10.20.5.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: cineverse-app-private
+
+  DatabaseSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      CidrBlock: 10.20.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: cineverse-database-private
+
+  WebRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      Tags:
+        - Key: Name
+          Value: cineverse-web-routes
+
+  WebInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref WebRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  WebSubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref WebSubnet
+      RouteTableId: !Ref WebRouteTable
+
+  AppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CineVerseVpc
+      Tags:
+        - Key: Name
+          Value: cineverse-private-routes
+
+  AppDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  AppSubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet
+      RouteTableId: !Ref AppRouteTable
+
+  DatabaseSubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet
+      RouteTableId: !Ref AppRouteTable
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: cineverse-nat-eip
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref WebSubnet
+      Tags:
+        - Key: Name
+          Value: cineverse-nat
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP access to the CineVerse web tier.
+      VpcId: !Ref CineVerseVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: cineverse-web-sg
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTP from the web tier only.
+      VpcId: !Ref CineVerseVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: cineverse-app-sg
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MySQL from the application tier only.
+      VpcId: !Ref CineVerseVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: cineverse-database-sg
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private CineVerse RDS subnets in two Availability Zones.
+      SubnetIds:
+        - !Ref DatabaseSubnet
+        - !Ref AppSubnet
+      Tags:
+        - Key: Name
+          Value: cineverse-rds-subnets
+
+  CineVerseRds:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DBInstanceIdentifier: cineverse-db
+      Engine: mariadb
+      EngineVersion: '10.11.19'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: cineverse_db
+      MasterUsername: cineverse_user
+      MasterUserPassword: !Ref DatabasePassword
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 1
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: cineverse-rds
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: cineverse-instance-role
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  AppServer:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - AppDefaultRoute
+      - AppSubnetRouteAssociation
+      - CineVerseRds
+    Properties:
+      ImageId: !Ref AmazonLinux2023Ami
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref InstanceProfile
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          SubnetId: !Ref AppSubnet
+          GroupSet:
+            - !Ref AppSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            Encrypted: true
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf install -y httpd php php-mysqlnd unzip
+          mkdir -p /var/www/html
+          curl -fsSL '${AppBundleUrl}' -o /tmp/cineverse.zip
+          unzip -q /tmp/cineverse.zip -d /var/www/html
+          cat > /var/www/html/config/config.php <<'PHP'
+          <?php
+          defined('DB_HOST') || define('DB_HOST', '${CineVerseRds.Endpoint.Address}');
+          defined('DB_NAME') || define('DB_NAME', 'cineverse_db');
+          defined('DB_USER') || define('DB_USER', 'cineverse_user');
+          defined('DB_PASSWORD') || define('DB_PASSWORD', '${DatabasePassword}');
+          defined('DB_CHARSET') || define('DB_CHARSET', 'utf8mb4');
+          PHP
+          chown -R apache:apache /var/www/html
+          chown root:apache /var/www/html/config/config.php
+          chmod 640 /var/www/html/config/config.php
+          restorecon -R /var/www/html
+          systemctl enable --now httpd
+      Tags:
+        - Key: Name
+          Value: cineverse-app
+
+  WebServer:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - AppServer
+      - WebInternetRoute
+      - WebSubnetRouteAssociation
+    Properties:
+      ImageId: !Ref AmazonLinux2023Ami
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref InstanceProfile
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          SubnetId: !Ref WebSubnet
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !Ref WebSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            Encrypted: true
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          dnf install -y httpd unzip
+          mkdir -p /var/www/html
+          curl -fsSL '${BundleUrl}' -o /tmp/cineverse.zip
+          unzip -jo /tmp/cineverse.zip index.html style.css script.js -d /var/www/html
+          for module in proxy_module proxy_http_module; do
+            if ! grep -Rqs "^[[:space:]]*LoadModule $module" /etc/httpd/conf.modules.d; then
+              echo "LoadModule $module modules/mod_$module.so" >> /etc/httpd/conf.modules.d/00-cineverse-proxy.conf
+            fi
+          done
+          cat > /etc/httpd/conf.d/cineverse-proxy.conf <<'APACHE'
+          ProxyRequests Off
+          ProxyPreserveHost On
+          ProxyPass /api/ http://${AppServer.PrivateIp}/api/
+          ProxyPassReverse /api/ http://${AppServer.PrivateIp}/api/
+          APACHE
+          restorecon -R /var/www/html /etc/httpd/conf.d
+          apachectl configtest
+          systemctl enable --now httpd
+      Tags:
+        - Key: Name
+          Value: cineverse-web
+
+  WebElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: cineverse-web-eip
+
+  WebElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt WebElasticIp.AllocationId
+      InstanceId: !Ref WebServer
+
+Outputs:
+  WebsiteUrl:
+    Description: Public website URL.
+    Value: !Sub http://${WebElasticIp}/
+  WebPublicIp:
+    Description: Public IP of the web server.
+    Value: !Ref WebElasticIp
+  WebInstanceId:
+    Value: !Ref WebServer
+  AppInstanceId:
+    Value: !Ref AppServer
+  RdsEndpoint:
+    Description: Private RDS database endpoint.
+    Value: !GetAtt CineVerseRds.Endpoint.Address
+  RdsInstanceId:
+    Value: !Ref CineVerseRds
+  AppPrivateIp:
+    Value: !GetAtt AppServer.PrivateIp
